@@ -34,6 +34,8 @@ clone git github.com/samuel/go-zookeeper d0e0d8e11f318e000a8cc434616d69e329edc37
 clone git github.com/coreos/go-etcd v2.0.0
 clone git github.com/hashicorp/consul v0.5.2
 
+clone git github.com/Azure/go-ansiterm 2c413f0799030343e9a4c2341d7badf84f45d586
+
 # get distribution packages
 clone git github.com/docker/distribution b9eeb328080d367dbde850ec6e94f1e4ac2b5efe
 
