@@ -121,6 +121,7 @@ func populateCommand(c *Container, env []string) error {
 		ProcessConfig:  processConfig,
 		ProcessLabel:   c.GetProcessLabel(),
 		MountLabel:     c.GetMountLabel(),
+		FirstStart:     !c.HasBeenStartedBefore,
 	}
 
 	return nil
