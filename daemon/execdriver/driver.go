@@ -175,4 +175,5 @@ type Command struct {
 	LxcConfig          []string          `json:"lxc_config"`
 	AppArmorProfile    string            `json:"apparmor_profile"`
 	CgroupParent       string            `json:"cgroup_parent"` // The parent cgroup for this command.
+	FirstStart         bool              `json:"first_start"`
 }
