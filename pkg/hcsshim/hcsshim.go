@@ -45,7 +45,7 @@ const (
 // handling gracefully without the daemon terminating.
 func loadAndFind(procedure string) (dll *syscall.DLL, proc *syscall.Proc, err error) {
 
-	logrus.Debugf("hcsshim::loadAndFind ", procedure)
+	logrus.Debugf("hcsshim::loadAndFind %s", procedure)
 
 	dll, err = syscall.LoadDLL(shimDLLName)
 	if err != nil {
@@ -63,13 +63,6 @@ func loadAndFind(procedure string) (dll *syscall.DLL, proc *syscall.Proc, err er
 
 	return dll, proc, nil
 }
-
-// use is a no-op, but the compiler cannot see that it is.
-// Calling use(p) ensures that p is kept live until that point.
-/*
-//go:noescape
-func use(p unsafe.Pointer)
-*/
 
 // Alternate without using //go:noescape as asm.s
 var temp unsafe.Pointer
