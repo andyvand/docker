@@ -1,14 +1,21 @@
 package graphdriver
 
-type DiffDiskDriver interface {
+import (
+	"github.com/microsoft/hcsshim"
+)
+
+type WindowsGraphDriver interface {
 	Driver
-	CopyDiff(id, sourceId string) error
+	CopyDiff(id, sourceId string, parentLayerPaths []string) error
+	LayerIdsToPaths(ids []string) []string
+	Info() hcsshim.DriverInfo
 }
 
 var (
 	// Slice of drivers that should be used in order
 	priority = []string{
-		"windows",
+		"windowsfilter",
+		"windowsdiff",
 		"vfs",
 	}
 )
