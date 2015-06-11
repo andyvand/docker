@@ -313,7 +313,16 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string, parentLayerPaths []st
 func (d *WindowsGraphDriver) LayerIdsToPaths(ids []string) []string {
 	var paths []string
 	for _, id := range ids {
-		paths = append(paths, d.dir(id))
+		path, err := d.Get(id, "")
+		if err != nil {
+			log.Debug("LayerIdsToPaths: Error getting mount path for id", id, ":", err.Error())
+			return nil
+		}
+		if d.Put(id) != nil {
+			log.Debug("LayerIdsToPaths: Error putting mount path for id", id, ":", err.Error())
+			return nil
+		}
+		paths = append(paths, path)
 	}
 	return paths
 }

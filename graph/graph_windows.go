@@ -98,3 +98,7 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 	graph.idIndex.Add(img.ID)
 	return nil
 }
+
+func (graph *Graph) restoreBaseImages() ([]string, error) {
+	return nil, nil
+}

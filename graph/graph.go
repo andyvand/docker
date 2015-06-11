@@ -65,8 +65,15 @@ func (graph *Graph) restore() error {
 			ids = append(ids, id)
 		}
 	}
+
+	baseIds, err := graph.restoreBaseImages()
+	if err != nil {
+		return err
+	}
+	ids = append(ids, baseIds...)
+
 	graph.idIndex = truncindex.NewTruncIndex(ids)
-	log.Debugf("Restored %d elements", len(dir))
+	log.Debugf("Restored %d elements", len(ids))
 	return nil
 }
 

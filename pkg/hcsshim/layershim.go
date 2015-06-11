@@ -306,13 +306,32 @@ func GetLayerMountPath(info DriverInfo, id string) (string, error) {
 		return "", err
 	}
 
-	var mountPathp [256]uint16
-	mountPathp[0] = 0
+	var mountPathLength uint64
+	mountPathLength = 0
 
 	r1, _, _ := procGetLayerMountPath.Call(
 		uintptr(unsafe.Pointer(&infop)),
 		uintptr(unsafe.Pointer(idp)),
-		uintptr(unsafe.Pointer(&mountPathp)))
+		uintptr(unsafe.Pointer(&mountPathLength)),
+		uintptr(unsafe.Pointer(nil)))
+	if r1 != 0 {
+		return "", syscall.Errno(r1)
+	}
+
+	// Allocate a mount path of the returned length.
+	if mountPathLength == 0 {
+		return "", nil
+	}
+
+	mountPathp := make([]uint16, mountPathLength)
+	mountPathp[0] = 0
+
+	r1, _, _ = procGetLayerMountPath.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(idp)),
+		uintptr(unsafe.Pointer(&mountPathLength)),
+		uintptr(unsafe.Pointer(&mountPathp[0])))
+	use(unsafe.Pointer(&mountPathLength))
 	use(unsafe.Pointer(&infop))
 	use(unsafe.Pointer(idp))
 
