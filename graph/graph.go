@@ -79,6 +79,13 @@ func (graph *Graph) restore() error {
 			ids = append(ids, id)
 		}
 	}
+
+	baseIds, err := graph.restoreBaseImages()
+	if err != nil {
+		return err
+	}
+	ids = append(ids, baseIds...)
+
 	graph.idIndex = truncindex.NewTruncIndex(ids)
 	logrus.Debugf("Restored %d elements", len(ids))
 	return nil
@@ -197,9 +204,10 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 	}
 
 	// Create root filesystem in the driver
-	if err := graph.driver.Create(img.ID, img.Parent); err != nil {
-		return fmt.Errorf("Driver %s failed to create image rootfs %s: %s", graph.driver, img.ID, err)
+	if err := createRootFilesystemInDriver(graph, img, layerData); err != nil {
+		return err
 	}
+
 	// Apply the diff/layer
 	if err := graph.storeImage(img, layerData, tmp); err != nil {
 		return err
