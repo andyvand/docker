@@ -129,12 +129,12 @@ However, there might be a way to implement that feature *on top of* Docker.
   <col width="45%">
   <col width="65%">
   <tr>
-    <td>Internet&nbsp;Relay&nbsp;Chat&nbsp;(IRC)</th>
+    <td>Internet&nbsp;Relay&nbsp;Chat&nbsp;(IRC)</td>
     <td>
       <p>
         IRC a direct line to our most knowledgeable Docker users; we have
-        both the  <code>#docker</code> and <code>#docker-dev</code> group on 
-        <strong>irc.freenode.net</strong>.  
+        both the  <code>#docker</code> and <code>#docker-dev</code> group on
+        <strong>irc.freenode.net</strong>.
         IRC is a rich chat protocol but it can overwhelm new users. You can search
         <a href="https://botbot.me/freenode/docker/#" target="_blank">our chat archives</a>.
       </p>
@@ -146,9 +146,9 @@ However, there might be a way to implement that feature *on top of* Docker.
     <td>
       There are two groups.
       <a href="https://groups.google.com/forum/#!forum/docker-user" target="_blank">Docker-user</a>
-      is for people using Docker containers. 
-      The <a href="https://groups.google.com/forum/#!forum/docker-dev" target="_blank">docker-dev</a> 
-      group is for contributors and other people contributing to the Docker 
+      is for people using Docker containers.
+      The <a href="https://groups.google.com/forum/#!forum/docker-dev" target="_blank">docker-dev</a>
+      group is for contributors and other people contributing to the Docker
       project.
     </td>
   </tr>
@@ -156,15 +156,15 @@ However, there might be a way to implement that feature *on top of* Docker.
     <td>Twitter</td>
     <td>
       You can follow <a href="https://twitter.com/docker/" target="_blank">Docker's Twitter feed</a>
-      to get updates on our products. You can also tweet us questions or just 
+      to get updates on our products. You can also tweet us questions or just
       share blogs or stories.
     </td>
   </tr>
   <tr>
     <td>Stack Overflow</td>
     <td>
-      Stack Overflow has over 7000K Docker questions listed. We regularly 
-      monitor <a href="http://stackoverflow.com/search?tab=newest&q=docker" target="_blank">Docker questions</a>
+      Stack Overflow has over 7000K Docker questions listed. We regularly
+      monitor <a href="https://stackoverflow.com/search?tab=newest&q=docker" target="_blank">Docker questions</a>
       and so do many other knowledgeable Docker users.
     </td>
   </tr>
@@ -190,9 +190,7 @@ Update the documentation when creating or modifying features. Test your
 documentation changes for clarity, concision, and correctness, as well as a
 clean documentation build. See our contributors guide for [our style
 guide](https://docs.docker.com/project/doc-style) and instructions on [building
-the
-documentation](https://docs.docker.com/project/test-and-docs/#build-and-test-the
-- documentation).
+the documentation](https://docs.docker.com/project/test-and-docs/#build-and-test-the-documentation).
 
 Write clean code. Universally formatted code promotes ease of writing, reading,
 and maintenance. Always run `gofmt -s -w file.go` on each changed file before
@@ -222,7 +220,7 @@ set of patches that should be reviewed together: for example, upgrading the
 version of a vendored dependency and taking advantage of its now available new
 feature constitute two separate units of work. Implementing a new function and
 calling it in another file constitute a single logical unit of work. The very
-high majory of submissions should have a single commit, so if in doubt: squash
+high majority of submissions should have a single commit, so if in doubt: squash
 down to one.
 
 After every commit, [make sure the test suite passes]
@@ -319,7 +317,7 @@ maintainer to make a difference on the project!
 
 ### IRC meetings
 
-There are two monthly meetings taking place on #docker-dev IRC to accomodate all
+There are two monthly meetings taking place on #docker-dev IRC to accommodate all
 timezones. Anybody can propose a topic for discussion prior to the meeting.
 
 If you feel the conversation is going off-topic, feel free to point it out.

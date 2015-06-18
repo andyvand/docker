@@ -1,3 +1,5 @@
+// +build linux
+
 package fs
 
 import (
@@ -16,12 +18,8 @@ type MemoryGroup struct {
 
 func (s *MemoryGroup) Apply(d *data) error {
 	dir, err := d.join("memory")
-	if err != nil {
-		if cgroups.IsNotFound(err) {
-			return nil
-		} else {
-			return err
-		}
+	if err != nil && !cgroups.IsNotFound(err) {
+		return err
 	}
 	defer func() {
 		if err != nil {
@@ -55,6 +53,11 @@ func (s *MemoryGroup) Set(path string, cgroup *configs.Cgroup) error {
 	}
 	if cgroup.MemorySwap > 0 {
 		if err := writeFile(path, "memory.memsw.limit_in_bytes", strconv.FormatInt(cgroup.MemorySwap, 10)); err != nil {
+			return err
+		}
+	}
+	if cgroup.KernelMemory > 0 {
+		if err := writeFile(path, "memory.kmem.limit_in_bytes", strconv.FormatInt(cgroup.KernelMemory, 10)); err != nil {
 			return err
 		}
 	}
@@ -98,6 +101,7 @@ func (s *MemoryGroup) GetStats(path string, stats *cgroups.Stats) error {
 		return fmt.Errorf("failed to parse memory.usage_in_bytes - %v", err)
 	}
 	stats.MemoryStats.Usage = value
+	stats.MemoryStats.Cache = stats.MemoryStats.Stats["cache"]
 	value, err = getCgroupParamUint(path, "memory.max_usage_in_bytes")
 	if err != nil {
 		return fmt.Errorf("failed to parse memory.max_usage_in_bytes - %v", err)

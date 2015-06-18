@@ -1,6 +1,6 @@
 page_title: Work on your issue
 page_description: Basic workflow for Docker contributions
-page_keywords: contribute, pull request, review, workflow, white-belt, black-belt, squash, commit
+page_keywords: contribute, pull request, review, workflow, beginner, squash, commit
 
 
 # Work on your issue
@@ -30,8 +30,10 @@ Follow this workflow as you work:
     source into a development container and iterate that way. For documentation
     alone, you can work on your local host. 
 
-    Review <a href="../set-up-dev-env" target="_blank">if you forgot the details
-    of working with a container</a>.
+    Make sure you don't change files in the `vendor` directory and its
+    subdirectories; they contain third-party dependency code. Review <a
+    href="../set-up-dev-env" target="_blank">if you forgot the details of
+    working with a container</a>.
 
 
 3. Test your changes as you work.
@@ -51,31 +53,31 @@ Follow this workflow as you work:
 	
 5. Format your source files correctly.
 
-    <table class="tg">
+    <table>
       <thead>
       <tr>
-        <th class="tg-e3zv">File type</th>
+        <th>File type</th>
         <th>How to format</th>
       </tr>
       </thead>
       <tbody>
       <tr>
-        <td class="tg-e3zv"><code>.go</code></td>
+        <td><code>.go</code></td>
         <td>
             <p>
             Format <code>.go</code> files using the <code>gofmt</code> command.
             For example, if you edited the `docker.go` file you would format the file
-        like this:
-        </p>
-        <p><code>$ gofmt -s -w file.go</code></p>
-        <p>
-        Most file editors have a plugin to format for you. Check your editor's
-        documentation.
-        </p>
+            like this:
+            </p>
+            <p><code>$ gofmt -s -w docker.go</code></p>
+            <p>
+            Most file editors have a plugin to format for you. Check your editor's
+            documentation.
+            </p>
         </td>
       </tr>
       <tr>
-        <td  class="tg-e3zv" style="white-space: nowrap"><code>.md</code> and non-<code>.go</code> files</td>
+        <td style="white-space: nowrap"><code>.md</code> and non-<code>.go</code> files</td>
         <td>Wrap lines to 80 characters.</td>
       </tr>
       </tbody>
@@ -107,7 +109,7 @@ Follow this workflow as you work:
 
 9. Push your change to your repository.
 
-        $ git push origin
+        $ git push origin 11038-fix-rhel-link
         Username for 'https://github.com': moxiegirl
         Password for 'https://moxiegirl@github.com': 
         Counting objects: 60, done.
@@ -117,11 +119,7 @@ Follow this workflow as you work:
         To https://github.com/moxiegirl/docker.git
          * [new branch]      11038-fix-rhel-link -> 11038-fix-rhel-link
         Branch 11038-fix-rhel-link set up to track remote branch 11038-fix-rhel-link from origin.
-        
-    The first time you push a change, you must specify the branch. Later, you can just do this:
-    
-    	git push origin
-    	
+
 ## Review your branch on GitHub
 
 After you push a new branch, you should verify it on GitHub:
@@ -147,54 +145,46 @@ After you push a new branch, you should verify it on GitHub:
 
 You should pull and rebase frequently as you work.  
 
-1. Return to the terminal on your local machine.
+1. Return to the terminal on your local machine and checkout your
+    feature branch in your local `docker-fork` repository.   
 
-2. Make sure you are in your branch.
+2. Fetch any last minute changes from `docker/docker`.
 
-		$ git branch 11038-fix-rhel-link
+        $ git fetch upstream master
+        From github.com:docker/docker
+         * branch            master     -> FETCH_HEAD
 
-3. Fetch all the changes from the `upstream/master` branch.
+3. Start an interactive rebase.
 
-		 $ git fetch upstream/master
+        $ git rebase -i upstream/master
 
-  	This command says get all the changes from the `master` branch belonging to
-  	the `upstream` remote.
+4. Rebase opens an editor with a list of commits.
 
-4. Rebase your local master with Docker's `upstream/master` branch.
+        pick 1a79f55 Tweak some of the other text for grammar
+        pick 53e4983 Fix a link
+        pick 3ce07bb Add a new line about RHEL
 
-		 $ git rebase -i upstream/master
-   
-  	This command starts an interactive rebase to merge code from Docker's
-  	`upstream/master` branch into your local branch. If you aren't familiar or
-  	comfortable with rebase, you can <a
-  	href="http://nathanleclaire.com/blog/2014/09/14/dont-be-scared-of-git-
-  	rebase" target="_blank">learn more about rebasing</a> on the web.
-  
-5. Rebase opens an editor with a list of commits.
+5. Replace the `pick` keyword with `squash` on all but the first commit.
 
-			pick 1a79f55 Tweak some of the other text for grammar 
-			pick 53e4983 Fix a link 
-			pick 3ce07bb Add a new line about RHEL
-        
-  	If you run into trouble, `git --rebase abort` removes any changes and gets
-  	you back to where you started. 
+        pick 1a79f55 Tweak some of the other text for grammar
+        squash 53e4983 Fix a link
+        squash 3ce07bb Add a new line about RHEL
 
-6. Squash the `pick` keyword with `squash` on all but the first commit.
+    After you save the changes and quit from the editor, git starts
+    the rebase, reporting the progress along the way. Sometimes
+    your changes can conflict with the work of others. If git
+    encounters a conflict, it stops the rebase, and prints guidance
+    for how to correct the conflict.
 
-			pick 1a79f55 Tweak some of the other text for grammar
-			squash 53e4983 Fix a link
-			squash 3ce07bb Add a new line about RHEL
+6. Edit and save your commit message.
 
-  	After closing the file, `git` opens your editor again to edit the commit
-  	message. 
+        $ git commit -s
 
-7. Edit and save your commit message.
+    Make sure your message includes <a href="../set-up-git" target="_blank">your signature</a>.
 
-	Make sure you include your signature.
+7. Force push any changes to your fork on GitHub.
 
-8. Push any changes to your fork on GitHub.
-
-		$ git push origin 11038-fix-rhel-link
+        $ git push -f origin 11038-fix-rhel-link
 
 
 ## Where to go next

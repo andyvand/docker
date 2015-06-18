@@ -178,7 +178,7 @@ Status Codes:
              "Warnings":[]
         }
 
-    **Second, start (using the ID returned above) the image we jus
+    **Second, start (using the ID returned above) the image we just
     created, mapping the ssh port 22 to something on the host**:
 
         POST /containers/e90e34656806/start HTTP/1.1
@@ -190,7 +190,7 @@ Status Codes:
 
 **Example response**:
 
-        HTTP/1.1 204 No Conten
+        HTTP/1.1 204 No Content
         Content-Type: text/plain; charset=utf-8
         Content-Length: 0
 
@@ -560,7 +560,7 @@ Status Codes:
 
     1.  Read 8 bytes
     2.  chose stdout or stderr depending on the first byte
-    3.  Extract the frame size from the last 4 byets
+    3.  Extract the frame size from the last 4 bytes
     4.  Read the extracted size and output it on the correct output
     5.  Goto 1)
 

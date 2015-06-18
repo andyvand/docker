@@ -1,6 +1,10 @@
+// +build linux
+
 package fs
 
 import (
+	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -19,6 +23,9 @@ var (
 		"cpuset":     &CpusetGroup{},
 		"cpuacct":    &CpuacctGroup{},
 		"blkio":      &BlkioGroup{},
+		"hugetlb":    &HugetlbGroup{},
+		"net_cls":    &NetClsGroup{},
+		"net_prio":   &NetPrioGroup{},
 		"perf_event": &PerfEventGroup{},
 		"freezer":    &FreezerGroup{},
 	}
@@ -75,9 +82,12 @@ type data struct {
 }
 
 func (m *Manager) Apply(pid int) error {
+
 	if m.Cgroups == nil {
 		return nil
 	}
+
+	var c = m.Cgroups
 
 	d, err := getCgroupData(m.Cgroups, pid)
 	if err != nil {
@@ -99,15 +109,20 @@ func (m *Manager) Apply(pid int) error {
 		// created then join consists of writing the process pids to cgroup.procs
 		p, err := d.path(name)
 		if err != nil {
+			if cgroups.IsNotFound(err) {
+				continue
+			}
 			return err
 		}
-		if !cgroups.PathExists(p) {
-			continue
-		}
-
 		paths[name] = p
 	}
 	m.Paths = paths
+
+	if paths["cpu"] != "" {
+		if err := CheckCpushares(paths["cpu"], c.CpuShares); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -118,19 +133,6 @@ func (m *Manager) Destroy() error {
 
 func (m *Manager) GetPaths() map[string]string {
 	return m.Paths
-}
-
-// Symmetrical public function to update device based cgroups.  Also available
-// in the systemd implementation.
-func ApplyDevices(c *configs.Cgroup, pid int) error {
-	d, err := getCgroupData(c, pid)
-	if err != nil {
-		return err
-	}
-
-	devices := subsystems["devices"]
-
-	return devices.Apply(d)
 }
 
 func (m *Manager) GetStats() (*cgroups.Stats, error) {
@@ -174,9 +176,6 @@ func (m *Manager) Freeze(state configs.FreezerState) error {
 	if err != nil {
 		return err
 	}
-	if !cgroups.PathExists(dir) {
-		return cgroups.NewNotFoundError("freezer")
-	}
 
 	prevState := m.Cgroups.Freezer
 	m.Cgroups.Freezer = state
@@ -201,9 +200,6 @@ func (m *Manager) GetPids() ([]int, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !cgroups.PathExists(dir) {
-		return nil, cgroups.NewNotFoundError("devices")
-	}
 
 	return cgroups.ReadProcsFile(dir)
 }
@@ -227,16 +223,16 @@ func getCgroupData(c *configs.Cgroup, pid int) (*data, error) {
 	}, nil
 }
 
-func (raw *data) parent(subsystem string) (string, error) {
+func (raw *data) parent(subsystem, mountpoint string) (string, error) {
 	initPath, err := cgroups.GetInitCgroupDir(subsystem)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(raw.root, subsystem, initPath), nil
+	return filepath.Join(mountpoint, initPath), nil
 }
 
 func (raw *data) path(subsystem string) (string, error) {
-	_, err := cgroups.FindCgroupMountpoint(subsystem)
+	mnt, err := cgroups.FindCgroupMountpoint(subsystem)
 	// If we didn't mount the subsystem, there is no point we make the path.
 	if err != nil {
 		return "", err
@@ -247,7 +243,7 @@ func (raw *data) path(subsystem string) (string, error) {
 		return filepath.Join(raw.root, subsystem, raw.cgroup), nil
 	}
 
-	parent, err := raw.parent(subsystem)
+	parent, err := raw.parent(subsystem, mnt)
 	if err != nil {
 		return "", err
 	}
@@ -270,6 +266,11 @@ func (raw *data) join(subsystem string) (string, error) {
 }
 
 func writeFile(dir, file, data string) error {
+	// Normally dir should not be empty, one case is that cgroup subsystem
+	// is not mounted, we will get empty dir, and we want it fail here.
+	if dir == "" {
+		return fmt.Errorf("no such directory for %s.", file)
+	}
 	return ioutil.WriteFile(filepath.Join(dir, file), []byte(data), 0700)
 }
 
@@ -285,5 +286,29 @@ func removePath(p string, err error) error {
 	if p != "" {
 		return os.RemoveAll(p)
 	}
+	return nil
+}
+
+func CheckCpushares(path string, c int64) error {
+	var cpuShares int64
+
+	fd, err := os.Open(filepath.Join(path, "cpu.shares"))
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+
+	_, err = fmt.Fscanf(fd, "%d", &cpuShares)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if c != 0 {
+		if c > cpuShares {
+			return fmt.Errorf("The maximum allowed cpu-shares is %d", cpuShares)
+		} else if c < cpuShares {
+			return fmt.Errorf("The minimum allowed cpu-shares is %d", cpuShares)
+		}
+	}
+
 	return nil
 }

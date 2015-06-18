@@ -12,29 +12,31 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/builder/parser"
 	"github.com/docker/docker/daemon"
+	"github.com/docker/docker/graph"
 	imagepkg "github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
-	"github.com/docker/docker/pkg/common"
+	"github.com/docker/docker/pkg/httputils"
 	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/progressreader"
-	"github.com/docker/docker/pkg/symlink"
+	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/tarsum"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/docker/docker/registry"
-	"github.com/docker/docker/utils"
+	"github.com/docker/docker/runconfig"
 )
 
 func (b *Builder) readContext(context io.Reader) error {
@@ -48,7 +50,7 @@ func (b *Builder) readContext(context io.Reader) error {
 		return err
 	}
 
-	if b.context, err = tarsum.NewTarSum(decompressedStream, true, tarsum.Version0); err != nil {
+	if b.context, err = tarsum.NewTarSum(decompressedStream, true, tarsum.Version1); err != nil {
 		return err
 	}
 
@@ -60,7 +62,7 @@ func (b *Builder) readContext(context io.Reader) error {
 	return nil
 }
 
-func (b *Builder) commit(id string, autoCmd []string, comment string) error {
+func (b *Builder) commit(id string, autoCmd *runconfig.Command, comment string) error {
 	if b.disableCommit {
 		return nil
 	}
@@ -70,8 +72,12 @@ func (b *Builder) commit(id string, autoCmd []string, comment string) error {
 	b.Config.Image = b.image
 	if id == "" {
 		cmd := b.Config.Cmd
-		b.Config.Cmd = []string{"/bin/sh", "-c", "#(nop) " + comment}
-		defer func(cmd []string) { b.Config.Cmd = cmd }(cmd)
+		if runtime.GOOS != "windows" {
+			b.Config.Cmd = runconfig.NewCommand("/bin/sh", "-c", "#(nop) "+comment)
+		} else {
+			b.Config.Cmd = runconfig.NewCommand("cmd", "/S /C", "REM (nop) "+comment)
+		}
+		defer func(cmd *runconfig.Command) { b.Config.Cmd = cmd }(cmd)
 
 		hit, err := b.probeCache()
 		if err != nil {
@@ -145,8 +151,16 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 	// do the copy (e.g. hash value if cached).  Don't actually do
 	// the copy until we've looked at all src files
 	for _, orig := range args[0 : len(args)-1] {
-		err := calcCopyInfo(b, cmdName, &copyInfos, orig, dest, allowRemote, allowDecompression)
-		if err != nil {
+		if err := calcCopyInfo(
+			b,
+			cmdName,
+			&copyInfos,
+			orig,
+			dest,
+			allowRemote,
+			allowDecompression,
+			true,
+		); err != nil {
 			return err
 		}
 	}
@@ -181,8 +195,12 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 	}
 
 	cmd := b.Config.Cmd
-	b.Config.Cmd = []string{"/bin/sh", "-c", fmt.Sprintf("#(nop) %s %s in %s", cmdName, srcHash, dest)}
-	defer func(cmd []string) { b.Config.Cmd = cmd }(cmd)
+	if runtime.GOOS != "windows" {
+		b.Config.Cmd = runconfig.NewCommand("/bin/sh", "-c", fmt.Sprintf("#(nop) %s %s in %s", cmdName, srcHash, dest))
+	} else {
+		b.Config.Cmd = runconfig.NewCommand("cmd", "/S /C", fmt.Sprintf("REM (nop) %s %s in %s", cmdName, srcHash, dest))
+	}
+	defer func(cmd *runconfig.Command) { b.Config.Cmd = cmd }(cmd)
 
 	hit, err := b.probeCache()
 	if err != nil {
@@ -216,7 +234,7 @@ func (b *Builder) runContextCommand(args []string, allowRemote bool, allowDecomp
 	return nil
 }
 
-func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath string, destPath string, allowRemote bool, allowDecompression bool) error {
+func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath string, destPath string, allowRemote bool, allowDecompression bool, allowWildcards bool) error {
 
 	if origPath != "" && origPath[0] == '/' && len(origPath) > 1 {
 		origPath = origPath[1:]
@@ -249,7 +267,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		*cInfos = append(*cInfos, &ci)
 
 		// Initiate the download
-		resp, err := utils.Download(ci.origPath)
+		resp, err := httputils.Download(ci.origPath)
 		if err != nil {
 			return err
 		}
@@ -262,7 +280,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		ci.tmpDir = tmpDirName
 
 		// Create a tmp file within our tmp dir
-		tmpFileName := path.Join(tmpDirName, "tmp")
+		tmpFileName := filepath.Join(tmpDirName, "tmp")
 		tmpFile, err := os.OpenFile(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			return err
@@ -302,7 +320,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 			return err
 		}
 
-		ci.origPath = path.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
+		ci.origPath = filepath.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
 
 		// If the destination is a directory, figure out the filename.
 		if strings.HasSuffix(ci.destPath, "/") {
@@ -327,7 +345,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 		if err != nil {
 			return err
 		}
-		tarSum, err := tarsum.NewTarSum(r, true, tarsum.Version0)
+		tarSum, err := tarsum.NewTarSum(r, true, tarsum.Version1)
 		if err != nil {
 			return err
 		}
@@ -341,17 +359,19 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	}
 
 	// Deal with wildcards
-	if ContainsWildcards(origPath) {
+	if allowWildcards && ContainsWildcards(origPath) {
 		for _, fileInfo := range b.context.GetSums() {
 			if fileInfo.Name() == "" {
 				continue
 			}
-			match, _ := path.Match(origPath, fileInfo.Name())
+			match, _ := filepath.Match(origPath, fileInfo.Name())
 			if !match {
 				continue
 			}
 
-			calcCopyInfo(b, cmdName, cInfos, fileInfo.Name(), destPath, allowRemote, allowDecompression)
+			// Note we set allowWildcards to false in case the name has
+			// a * in it
+			calcCopyInfo(b, cmdName, cInfos, fileInfo.Name(), destPath, allowRemote, allowDecompression, false)
 		}
 		return nil
 	}
@@ -361,7 +381,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	if err := b.checkPathForAddition(origPath); err != nil {
 		return err
 	}
-	fi, _ := os.Stat(path.Join(b.contextPath, origPath))
+	fi, _ := os.Stat(filepath.Join(b.contextPath, origPath))
 
 	ci := copyInfo{}
 	ci.origPath = origPath
@@ -382,7 +402,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 
 	// Must be a dir
 	var subfiles []string
-	absOrigPath := path.Join(b.contextPath, ci.origPath)
+	absOrigPath := filepath.Join(b.contextPath, ci.origPath)
 
 	// Add a trailing / to make sure we only pick up nested files under
 	// the dir and not sibling files of the dir that just happen to
@@ -395,7 +415,7 @@ func calcCopyInfo(b *Builder, cmdName string, cInfos *[]*copyInfo, origPath stri
 	absOrigPathNoSlash := absOrigPath[:len(absOrigPath)-1]
 
 	for _, fileInfo := range b.context.GetSums() {
-		absFile := path.Join(b.contextPath, fileInfo.Name())
+		absFile := filepath.Join(b.contextPath, fileInfo.Name())
 		// Any file in the context that starts with the given path will be
 		// picked up and its hashcode used.  However, we'll exclude the
 		// root dir itself.  We do this for a coupel of reasons:
@@ -433,24 +453,27 @@ func (b *Builder) pullImage(name string) (*imagepkg.Image, error) {
 	if tag == "" {
 		tag = "latest"
 	}
-	job := b.Engine.Job("pull", remote, tag)
+
 	pullRegistryAuth := b.AuthConfig
-	if len(b.AuthConfigFile.Configs) > 0 {
+	if len(b.ConfigFile.AuthConfigs) > 0 {
 		// The request came with a full auth config file, we prefer to use that
-		repoInfo, err := registry.ResolveRepositoryInfo(job, remote)
+		repoInfo, err := b.Daemon.RegistryService.ResolveRepository(remote)
 		if err != nil {
 			return nil, err
 		}
-		resolvedAuth := b.AuthConfigFile.ResolveAuthConfig(repoInfo.Index)
+		resolvedAuth := registry.ResolveAuthConfig(b.ConfigFile, repoInfo.Index)
 		pullRegistryAuth = &resolvedAuth
 	}
-	job.SetenvBool("json", b.StreamFormatter.Json())
-	job.SetenvBool("parallel", true)
-	job.SetenvJson("authConfig", pullRegistryAuth)
-	job.Stdout.Add(ioutils.NopWriteCloser(b.OutOld))
-	if err := job.Run(); err != nil {
+
+	imagePullConfig := &graph.ImagePullConfig{
+		AuthConfig: pullRegistryAuth,
+		OutStream:  ioutils.NopWriteCloser(b.OutOld),
+	}
+
+	if err := b.Daemon.Repositories().Pull(remote, tag, imagePullConfig); err != nil {
 		return nil, err
 	}
+
 	image, err := b.Daemon.Repositories().LookupImage(name)
 	if err != nil {
 		return nil, err
@@ -475,7 +498,7 @@ func (b *Builder) processImageFrom(img *imagepkg.Image) error {
 		fmt.Fprintf(b.ErrStream, "# Executing %d build triggers\n", nTriggers)
 	}
 
-	// Copy the ONBUILD triggers, and remove them from the config, since the config will be commited.
+	// Copy the ONBUILD triggers, and remove them from the config, since the config will be committed.
 	onBuildTriggers := b.Config.OnBuild
 	b.Config.OnBuild = []string{}
 
@@ -520,13 +543,13 @@ func (b *Builder) probeCache() (bool, error) {
 		return false, err
 	}
 	if cache == nil {
-		log.Debugf("[BUILDER] Cache miss")
+		logrus.Debugf("[BUILDER] Cache miss")
 		b.cacheBusted = true
 		return false, nil
 	}
 
 	fmt.Fprintf(b.OutStream, " ---> Using cache\n")
-	log.Debugf("[BUILDER] Use cached version")
+	logrus.Debugf("[BUILDER] Use cached version")
 	b.image = cache.ID
 	return true, nil
 }
@@ -537,10 +560,22 @@ func (b *Builder) create() (*daemon.Container, error) {
 	}
 	b.Config.Image = b.image
 
+	hostConfig := &runconfig.HostConfig{
+		CpuShares:    b.cpuShares,
+		CpuPeriod:    b.cpuPeriod,
+		CpuQuota:     b.cpuQuota,
+		CpusetCpus:   b.cpuSetCpus,
+		CpusetMems:   b.cpuSetMems,
+		CgroupParent: b.cgroupParent,
+		Memory:       b.memory,
+		MemorySwap:   b.memorySwap,
+		NetworkMode:  "bridge",
+	}
+
 	config := *b.Config
 
 	// Create the container
-	c, warnings, err := b.Daemon.Create(b.Config, nil, "")
+	c, warnings, err := b.Daemon.Create(b.Config, hostConfig, "")
 	if err != nil {
 		return nil, err
 	}
@@ -549,14 +584,15 @@ func (b *Builder) create() (*daemon.Container, error) {
 	}
 
 	b.TmpContainers[c.ID] = struct{}{}
-	fmt.Fprintf(b.OutStream, " ---> Running in %s\n", common.TruncateID(c.ID))
+	fmt.Fprintf(b.OutStream, " ---> Running in %s\n", stringid.TruncateID(c.ID))
 
-	if len(config.Cmd) > 0 {
+	if config.Cmd.Len() > 0 {
 		// override the entry point that may have been picked up from the base image
-		c.Path = config.Cmd[0]
-		c.Args = config.Cmd[1:]
+		s := config.Cmd.Slice()
+		c.Path = s[0]
+		c.Args = s[1:]
 	} else {
-		config.Cmd = []string{}
+		config.Cmd = runconfig.NewCommand()
 	}
 
 	return c, nil
@@ -565,13 +601,24 @@ func (b *Builder) create() (*daemon.Container, error) {
 func (b *Builder) run(c *daemon.Container) error {
 	var errCh chan error
 	if b.Verbose {
-		errCh = b.Daemon.Attach(&c.StreamConfig, c.Config.OpenStdin, c.Config.StdinOnce, c.Config.Tty, nil, b.OutStream, b.ErrStream)
+		errCh = c.Attach(nil, b.OutStream, b.ErrStream)
 	}
 
 	//start the container
 	if err := c.Start(); err != nil {
 		return err
 	}
+
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-b.cancelled:
+			logrus.Debugln("Build cancelled, killing container:", c.ID)
+			c.Kill()
+		case <-finished:
+		}
+	}()
 
 	if b.Verbose {
 		// Block on reading output from container, stop on err or chan closed
@@ -582,18 +629,17 @@ func (b *Builder) run(c *daemon.Container) error {
 
 	// Wait for it to finish
 	if ret, _ := c.WaitStop(-1 * time.Second); ret != 0 {
-		err := &utils.JSONError{
-			Message: fmt.Sprintf("The command %v returned a non-zero code: %d", b.Config.Cmd, ret),
+		return &jsonmessage.JSONError{
+			Message: fmt.Sprintf("The command '%s' returned a non-zero code: %d", b.Config.Cmd.ToString(), ret),
 			Code:    ret,
 		}
-		return err
 	}
 
 	return nil
 }
 
 func (b *Builder) checkPathForAddition(orig string) error {
-	origPath := path.Join(b.contextPath, orig)
+	origPath := filepath.Join(b.contextPath, orig)
 	origPath, err := filepath.EvalSymlinks(origPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -601,7 +647,11 @@ func (b *Builder) checkPathForAddition(orig string) error {
 		}
 		return err
 	}
-	if !strings.HasPrefix(origPath, b.contextPath) {
+	contextPath, err := filepath.EvalSymlinks(b.contextPath)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(origPath, contextPath) {
 		return fmt.Errorf("Forbidden path outside the build context: %s (%s)", orig, origPath)
 	}
 	if _, err := os.Stat(origPath); err != nil {
@@ -617,15 +667,13 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 	var (
 		err        error
 		destExists = true
-		origPath   = path.Join(b.contextPath, orig)
-		destPath   = path.Join(container.RootfsPath(), dest)
+		origPath   = filepath.Join(b.contextPath, orig)
+		destPath   string
 	)
 
-	if destPath != container.RootfsPath() {
-		destPath, err = symlink.FollowSymlinkInScope(destPath, container.RootfsPath())
-		if err != nil {
-			return err
-		}
+	destPath, err = container.GetResourcePath(dest)
+	if err != nil {
+		return err
 	}
 
 	// Preserve the trailing '/'
@@ -668,11 +716,11 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 		if err := chrootarchive.UntarPath(origPath, tarDest); err == nil {
 			return nil
 		} else if err != io.EOF {
-			log.Debugf("Couldn't untar %s to %s: %s", origPath, tarDest, err)
+			logrus.Debugf("Couldn't untar %s to %s: %s", origPath, tarDest, err)
 		}
 	}
 
-	if err := os.MkdirAll(path.Dir(destPath), 0755); err != nil {
+	if err := system.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return err
 	}
 	if err := chrootarchive.CopyWithTar(origPath, destPath); err != nil {
@@ -681,7 +729,7 @@ func (b *Builder) addContext(container *daemon.Container, orig, dest string, dec
 
 	resPath := destPath
 	if destExists && destStat.IsDir() {
-		resPath = path.Join(destPath, path.Base(origPath))
+		resPath = filepath.Join(destPath, filepath.Base(origPath))
 	}
 
 	return fixPermissions(origPath, resPath, 0, 0, destExists)
@@ -694,51 +742,17 @@ func copyAsDirectory(source, destination string, destExisted bool) error {
 	return fixPermissions(source, destination, 0, 0, destExisted)
 }
 
-func fixPermissions(source, destination string, uid, gid int, destExisted bool) error {
-	// If the destination didn't already exist, or the destination isn't a
-	// directory, then we should Lchown the destination. Otherwise, we shouldn't
-	// Lchown the destination.
-	destStat, err := os.Stat(destination)
-	if err != nil {
-		// This should *never* be reached, because the destination must've already
-		// been created while untar-ing the context.
-		return err
-	}
-	doChownDestination := !destExisted || !destStat.IsDir()
-
-	// We Walk on the source rather than on the destination because we don't
-	// want to change permissions on things we haven't created or modified.
-	return filepath.Walk(source, func(fullpath string, info os.FileInfo, err error) error {
-		// Do not alter the walk root iff. it existed before, as it doesn't fall under
-		// the domain of "things we should chown".
-		if !doChownDestination && (source == fullpath) {
-			return nil
-		}
-
-		// Path is prefixed by source: substitute with destination instead.
-		cleaned, err := filepath.Rel(source, fullpath)
-		if err != nil {
-			return err
-		}
-
-		fullpath = path.Join(destination, cleaned)
-		return os.Lchown(fullpath, uid, gid)
-	})
-}
-
 func (b *Builder) clearTmp() {
 	for c := range b.TmpContainers {
-		tmp, err := b.Daemon.Get(c)
-		if err != nil {
-			fmt.Fprint(b.OutStream, err.Error())
+		rmConfig := &daemon.ContainerRmConfig{
+			ForceRemove:  true,
+			RemoveVolume: true,
 		}
-
-		if err := b.Daemon.Rm(tmp); err != nil {
-			fmt.Fprintf(b.OutStream, "Error removing intermediate container %s: %v\n", common.TruncateID(c), err)
+		if err := b.Daemon.ContainerRm(c, rmConfig); err != nil {
+			fmt.Fprintf(b.OutStream, "Error removing intermediate container %s: %v\n", stringid.TruncateID(c), err)
 			return
 		}
-		b.Daemon.DeleteVolumes(tmp.VolumePaths())
 		delete(b.TmpContainers, c)
-		fmt.Fprintf(b.OutStream, "Removing intermediate container %s\n", common.TruncateID(c))
+		fmt.Fprintf(b.OutStream, "Removing intermediate container %s\n", stringid.TruncateID(c))
 	}
 }

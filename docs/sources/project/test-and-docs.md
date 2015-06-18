@@ -2,13 +2,6 @@ page_title: Run tests and test documentation
 page_description: Describes Docker's testing infrastructure
 page_keywords: make test, make docs, Go tests, gofmt, contributing, running tests
 
-<!-- TODO (@thaJeztah) remove after docs/base is updated -->
-<style type="text/css">
-.tg  {border-collapse:collapse;border-spacing:0;margin-bottom:15px;}
-.tg td{padding:5px 5px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;}
-.tg th{padding:5px 5px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;text-align:left;}
-</style>
-
 # Run tests and test documentation
 
 Contributing includes testing your changes. If you change the Docker code, you
@@ -47,7 +40,7 @@ units each have unit tests and then, together, integration tests that test the
 interface between the components. The `integration` and `integration-cli`
 directories in the Docker repository contain integration test code.
 
-Testing is its own speciality. If you aren't familiar with testing techniques,
+Testing is its own specialty. If you aren't familiar with testing techniques,
 there is a lot of information available to you on the Web. For now, you should
 understand that, the Docker maintainers may ask you to write a new test or
 change an existing one.
@@ -59,35 +52,31 @@ The `Makefile` contains a target for the entire test suite. The target's name
 is simply `test`. The make file contains several targets for testing:
 
 <style type="text/css">
-.make-target {font-family:"Courier New", Courier, monospace !important;}
+.monospaced {font-family: Monaco, Consolas, "Lucida Console", monospace !important;}
 </style>
-<table class="tg">
+<table>
   <tr>
     <th>Target</th>
     <th>What this target does</th>
   </tr>
   <tr>
-    <td class="make-target">test</td>
+    <td class="monospaced">test</td>
     <td>Run all the tests.</td>
   </tr>
   <tr>
-    <td class="make-target">test-unit</td>
+    <td class="monospaced">test-unit</td>
     <td>Run just the unit tests.</td>
   </tr>
   <tr>
-    <td class="make-target">test-integration</td>
-    <td>Run just integration tests.</td>
-  </tr>
-  <tr>
-    <td class="make-target">test-integration-cli</td>
+    <td class="monospaced">test-integration-cli</td>
     <td>Run the test for the integration command line interface.</td>
   </tr>
   <tr>
-    <td class="make-target">test-docker-py</td>
+    <td class="monospaced">test-docker-py</td>
     <td>Run the tests for Docker API client.</td>
   </tr>
   <tr>
-    <td class="make-target">docs-test</td>
+    <td class="monospaced">docs-test</td>
     <td>Runs the documentation test build.</td>
   </tr>
 </table>
@@ -113,7 +102,7 @@ Run the entire test suite on your current repository:
 
     * creates a new binary
     * cross-compiles all the binaries for the various operating systems
-    * runs the all the tests in the system
+    * runs all the tests in the system
 
     It can take several minutes to run all the tests. When they complete
     successfully, you see the output concludes with something like this:
@@ -135,7 +124,7 @@ Run the entire test suite on your current repository:
 If you are working inside a Docker development container, you use the
 `hack/make.sh` script to run tests. The `hack/make.sh` script doesn't
 have a single target that runs all the tests. Instead, you provide a single
-commmand line with multiple targets that does the same thing.
+command line with multiple targets that does the same thing.
 
 Try this now.
 
@@ -150,7 +139,7 @@ Try this now.
 
 3. Run the tests using the `hack/make.sh` script.
 
-        root@5f8630b873fe:/go/src/github.com/docker/docker# hack/make.sh dynbinary binary cross test-unit test-integration test-integration-cli test-docker-py
+        root@5f8630b873fe:/go/src/github.com/docker/docker# hack/make.sh dynbinary binary cross test-unit test-integration-cli test-docker-py
 
     The tests run just as they did within your local host.
 
@@ -166,17 +155,18 @@ Most test targets require that you build these precursor targets first:
 
 ## Running individual or multiple named tests 
 
+We use [gocheck](https://labix.org/gocheck) for our integration-cli tests. 
 You can use the `TESTFLAGS` environment variable to run a single test. The
 flag's value is passed as arguments to the `go test` command. For example, from
 your local host you can run the `TestBuild` test with this command:
 
-        $ TESTFLAGS='-test.run ^TestBuild$' make test
+    $ TESTFLAGS='-check.f DockerSuite.TestBuild*' make test-integration-cli
 
 To run the same test inside your Docker development container, you do this:
 
-        root@5f8630b873fe:/go/src/github.com/docker/docker# TESTFLAGS='-run ^TestBuild$' hack/make.sh
+    root@5f8630b873fe:/go/src/github.com/docker/docker# TESTFLAGS='-check.f TestBuild*' hack/make.sh binary test-integration-cli
 
-## If test under Boot2Docker fail do to space errors
+## If tests under Boot2Docker fail due to disk space errors
 
 Running the tests requires about 2GB of memory. If you are running your
 container on bare metal, that is you are not running with Boot2Docker, your
@@ -236,6 +226,46 @@ with new memory settings.
 6. Restart your container and try your test again.
 
 
+## Testing just the Windows client
+
+This explains how to test the Windows client on a Windows server set up as a
+development environment.  You'll use the **Git Bash** came with the Git for
+Windows installation.  **Git Bash** just as it sounds allows you to run a Bash
+terminal on Windows. 
+
+1.  If you don't have one, start a Git Bash terminal.
+
+	 ![Git Bash](/project/images/git_bash.png)
+
+2. Change to the `docker` source directory.
+
+		$ cd /c/gopath/src/github.com/docker/docker
+    
+3. Set `DOCKER_CLIENTONLY` as follows:
+
+		$ export DOCKER_CLIENTONLY=1
+     
+	This ensures you are building only the client binary instead of both the
+	binary and the daemon.
+	
+4. Set `DOCKER_TEST_HOST` to the `tcp://IP_ADDRESS:2376` value; substitute your
+machine's actual IP address, for example:
+
+		$ export DOCKER_TEST_HOST=tcp://263.124.23.200:2376
+
+5. Make the binary and the test:
+
+		$ hack/make.sh binary test-integration-cli
+  	
+   Many tests are skipped on Windows for various reasons. You see which tests
+   were skipped by re-running the make and passing in the 
+   `TESTFLAGS='-test.v'` value.
+        
+
+You can now choose to make changes to the Docker source or the tests. If you
+make any changes just run these commands again.
+
+
 ## Build and test the documentation
 
 The Docker documentation source files are under `docs/sources`. The content is
@@ -256,7 +286,7 @@ can browse the docs.
 
 1. In a terminal, change to the root of your `docker-fork` repository.
 
-        $ cd ~/repos/dry-run-test
+        $ cd ~/repos/docker-fork
 
 2. Make sure you are in your feature branch.
 

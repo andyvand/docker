@@ -2,36 +2,16 @@ package progressreader
 
 import (
 	"io"
+
+	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/docker/docker/pkg/streamformatter"
 )
-
-type StreamFormatter interface {
-	FormatProg(string, string, interface{}) []byte
-	FormatStatus(string, string, ...interface{}) []byte
-	FormatError(error) []byte
-}
-
-type PR_JSONProgress interface {
-	GetCurrent() int
-	GetTotal() int
-}
-
-type JSONProg struct {
-	Current int
-	Total   int
-}
-
-func (j *JSONProg) GetCurrent() int {
-	return j.Current
-}
-func (j *JSONProg) GetTotal() int {
-	return j.Total
-}
 
 // Reader with progress bar
 type Config struct {
 	In         io.ReadCloser // Stream to read from
 	Out        io.Writer     // Where to send progress bar to
-	Formatter  StreamFormatter
+	Formatter  *streamformatter.StreamFormatter
 	Size       int
 	Current    int
 	LastUpdate int
@@ -43,6 +23,7 @@ type Config struct {
 func New(newReader Config) *Config {
 	return &newReader
 }
+
 func (config *Config) Read(p []byte) (n int, err error) {
 	read, err := config.In.Read(p)
 	config.Current += read
@@ -54,16 +35,30 @@ func (config *Config) Read(p []byte) (n int, err error) {
 		}
 	}
 	if config.Current-config.LastUpdate > updateEvery || err != nil {
-		config.Out.Write(config.Formatter.FormatProg(config.ID, config.Action, &JSONProg{Current: config.Current, Total: config.Size}))
+		updateProgress(config)
 		config.LastUpdate = config.Current
 	}
-	// Send newline when complete
-	if config.NewLines && err != nil && read == 0 {
-		config.Out.Write(config.Formatter.FormatStatus("", ""))
+
+	if err != nil && read == 0 {
+		updateProgress(config)
+		if config.NewLines {
+			config.Out.Write(config.Formatter.FormatStatus("", ""))
+		}
 	}
 	return read, err
 }
+
 func (config *Config) Close() error {
-	config.Out.Write(config.Formatter.FormatProg(config.ID, config.Action, &JSONProg{Current: config.Current, Total: config.Size}))
+	if config.Current < config.Size {
+		//print a full progress bar when closing prematurely
+		config.Current = config.Size
+		updateProgress(config)
+	}
 	return config.In.Close()
+}
+
+func updateProgress(config *Config) {
+	progress := jsonmessage.JSONProgress{Current: config.Current, Total: config.Size}
+	fmtMessage := config.Formatter.FormatProgress(config.ID, config.Action, &progress)
+	config.Out.Write(fmtMessage)
 }

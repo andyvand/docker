@@ -1,13 +1,13 @@
-page_title: Coding Style Checklist
+page_title: Coding style checklist
 page_description: List of guidelines for coding Docker contributions
 page_keywords: change, commit, squash, request, pull request, test, unit test, integration tests, Go, gofmt, LGTM
 
-# Coding Style Checklist
+# Coding style checklist
 
 This checklist summarizes the material you experienced working through [make a
 code contribution](/project/make-a-contribution) and [advanced
-contributing](/project/advanced-contributing). The checklist applies to code
-that is program code or code that is documentation code.
+contributing](/project/advanced-contributing). The checklist applies to both 
+program code and documentation code.
 
 ## Change and commit code
 
@@ -86,8 +86,8 @@ that is program code or code that is documentation code.
 
 ## Merges after pull requests
 
-* After a merge, [a master build](https://master.dockerproject.com/) is
+* After a merge, [a master build](https://master.dockerproject.org/) is
   available almost immediately.
 
 * If you made a documentation change, you can see it at
-  [docs.master.dockerproject.com](http://docs.master.dockerproject.com/).
+  [docs.master.dockerproject.org](http://docs.master.dockerproject.org/).

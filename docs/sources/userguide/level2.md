@@ -1,10 +1,10 @@
-page_title: Docker Images Test
+page_title: Docker images test
 page_description: How to work with Docker images.
 page_keywords: documentation, docs, the docker guide, docker guide, docker, docker platform, virtualization framework, docker.io, Docker images, Docker image, image management, Docker repos, Docker repositories, docker, docker tag, docker tags, Docker Hub, collaboration
 
 <a title="back" class="dockerfile back" href="/userguide/dockerimages/#creating-our-own-images">Back</a>
 
-#Dockerfile Tutorial
+#Dockerfile tutorial
 
 ## Test your Dockerfile knowledge - Level 2
 
@@ -74,7 +74,7 @@ RUN apt-get install -y <input id="gcc" class="l_fill" type="text"><br>
 <input id="run6" class="l_fill" type="text">cd redis-stable && make && make install<br>
 &#35; launch redis when starting the image
 <input id="entrypoint" class="l_fill" type="text"> ["redis-server"]<br>
-&#35; run as user dameon
+&#35; run as user daemon
 <input id="user" class="l_fill" type="text"> daemon<br>
 &#35; expose port 6379
 <input id="expose" class="l_fill" type="text"> 6379

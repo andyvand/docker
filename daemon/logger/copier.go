@@ -2,7 +2,9 @@ package logger
 
 import (
 	"bufio"
+	"bytes"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -15,8 +17,9 @@ type Copier struct {
 	// cid is container id for which we copying logs
 	cid string
 	// srcs is map of name -> reader pairs, for example "stdout", "stderr"
-	srcs map[string]io.Reader
-	dst  Logger
+	srcs     map[string]io.Reader
+	dst      Logger
+	copyJobs sync.WaitGroup
 }
 
 // NewCopier creates new Copier
@@ -31,18 +34,38 @@ func NewCopier(cid string, srcs map[string]io.Reader, dst Logger) (*Copier, erro
 // Run starts logs copying
 func (c *Copier) Run() {
 	for src, w := range c.srcs {
+		c.copyJobs.Add(1)
 		go c.copySrc(src, w)
 	}
 }
 
 func (c *Copier) copySrc(name string, src io.Reader) {
-	scanner := bufio.NewScanner(src)
-	for scanner.Scan() {
-		if err := c.dst.Log(&Message{ContainerID: c.cid, Line: scanner.Bytes(), Source: name, Timestamp: time.Now().UTC()}); err != nil {
-			logrus.Errorf("Failed to log msg %q for logger %s: %s", scanner.Bytes(), c.dst.Name(), err)
+	defer c.copyJobs.Done()
+	reader := bufio.NewReader(src)
+
+	for {
+		line, err := reader.ReadBytes('\n')
+		line = bytes.TrimSuffix(line, []byte{'\n'})
+
+		// ReadBytes can return full or partial output even when it failed.
+		// e.g. it can return a full entry and EOF.
+		if err == nil || len(line) > 0 {
+			if logErr := c.dst.Log(&Message{ContainerID: c.cid, Line: line, Source: name, Timestamp: time.Now().UTC()}); logErr != nil {
+				logrus.Errorf("Failed to log msg %q for logger %s: %s", line, c.dst.Name(), logErr)
+			}
 		}
+
+		if err != nil {
+			if err != io.EOF {
+				logrus.Errorf("Error scanning log stream: %s", err)
+			}
+			return
+		}
+
 	}
-	if err := scanner.Err(); err != nil {
-		logrus.Errorf("Error scanning log stream: %s", err)
-	}
+}
+
+// Wait waits until all copying is done
+func (c *Copier) Wait() {
+	c.copyJobs.Wait()
 }

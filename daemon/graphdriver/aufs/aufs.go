@@ -1,20 +1,22 @@
+// +build linux
+
 /*
 
 aufs driver directory structure
 
-.
-├── layers // Metadata of layers
-│   ├── 1
-│   ├── 2
-│   └── 3
-├── diff  // Content of the layer
-│   ├── 1  // Contains layers that need to be mounted for the id
-│   ├── 2
-│   └── 3
-└── mnt    // Mount points for the rw layers to be mounted
-    ├── 1
-    ├── 2
-    └── 3
+  .
+  ├── layers // Metadata of layers
+  │   ├── 1
+  │   ├── 2
+  │   └── 3
+  ├── diff  // Content of the layer
+  │   ├── 1  // Contains layers that need to be mounted for the id
+  │   ├── 2
+  │   └── 3
+  └── mnt    // Mount points for the rw layers to be mounted
+      ├── 1
+      ├── 2
+      └── 3
 
 */
 
@@ -23,6 +25,7 @@ package aufs
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -30,13 +33,13 @@ import (
 	"sync"
 	"syscall"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
-	"github.com/docker/docker/pkg/common"
 	"github.com/docker/docker/pkg/directory"
 	mountpk "github.com/docker/docker/pkg/mount"
+	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/libcontainer/label"
 )
 
@@ -47,6 +50,9 @@ var (
 		graphdriver.FsMagicAufs,
 	}
 	backingFs = "<unknown>"
+
+	enableDirpermLock sync.Once
+	enableDirperm     bool
 )
 
 func init() {
@@ -152,6 +158,7 @@ func (a *Driver) Status() [][2]string {
 		{"Root Dir", a.rootPath()},
 		{"Backing Filesystem", backingFs},
 		{"Dirs", fmt.Sprintf("%d", len(ids))},
+		{"Dirperm1 Supported", fmt.Sprintf("%v", useDirperm())},
 	}
 }
 
@@ -216,7 +223,7 @@ func (a *Driver) Remove(id string) error {
 	defer a.Unlock()
 
 	if a.active[id] != 0 {
-		log.Errorf("Removing active id %s", id)
+		logrus.Errorf("Removing active id %s", id)
 	}
 
 	// Make sure the dir is umounted first
@@ -405,7 +412,7 @@ func (a *Driver) Cleanup() error {
 
 	for _, id := range ids {
 		if err := a.unmount(id); err != nil {
-			log.Errorf("Unmounting %s: %s", common.TruncateID(id), err)
+			logrus.Errorf("Unmounting %s: %s", stringid.TruncateID(id), err)
 		}
 	}
 
@@ -422,7 +429,11 @@ func (a *Driver) aufsMount(ro []string, rw, target, mountLabel string) (err erro
 	// Mount options are clipped to page size(4096 bytes). If there are more
 	// layers then these are remounted individually using append.
 
-	b := make([]byte, syscall.Getpagesize()-len(mountLabel)-54) // room for xino & mountLabel
+	offset := 54
+	if useDirperm() {
+		offset += len("dirperm1")
+	}
+	b := make([]byte, syscall.Getpagesize()-len(mountLabel)-offset) // room for xino & mountLabel
 	bp := copy(b, fmt.Sprintf("br:%s=rw", rw))
 
 	firstMount := true
@@ -446,7 +457,11 @@ func (a *Driver) aufsMount(ro []string, rw, target, mountLabel string) (err erro
 		}
 
 		if firstMount {
-			data := label.FormatMountLabel(fmt.Sprintf("%s,dio,xino=/dev/shm/aufs.xino", string(b[:bp])), mountLabel)
+			opts := "dio,xino=/dev/shm/aufs.xino"
+			if useDirperm() {
+				opts += ",dirperm1"
+			}
+			data := label.FormatMountLabel(fmt.Sprintf("%s,%s", string(b[:bp]), opts), mountLabel)
 			if err = mount("none", target, "aufs", 0, data); err != nil {
 				return
 			}
@@ -459,4 +474,34 @@ func (a *Driver) aufsMount(ro []string, rw, target, mountLabel string) (err erro
 	}
 
 	return
+}
+
+// useDirperm checks dirperm1 mount option can be used with the current
+// version of aufs.
+func useDirperm() bool {
+	enableDirpermLock.Do(func() {
+		base, err := ioutil.TempDir("", "docker-aufs-base")
+		if err != nil {
+			logrus.Errorf("error checking dirperm1: %v", err)
+			return
+		}
+		defer os.RemoveAll(base)
+
+		union, err := ioutil.TempDir("", "docker-aufs-union")
+		if err != nil {
+			logrus.Errorf("error checking dirperm1: %v", err)
+			return
+		}
+		defer os.RemoveAll(union)
+
+		opts := fmt.Sprintf("br:%s,dirperm1,xino=/dev/shm/aufs.xino", base)
+		if err := mount("none", union, "aufs", 0, opts); err != nil {
+			return
+		}
+		enableDirperm = true
+		if err := Unmount(union); err != nil {
+			logrus.Errorf("error checking dirperm1: failed to unmount %v", err)
+		}
+	})
+	return enableDirperm
 }

@@ -1,3 +1,5 @@
+// +build linux
+
 package fs
 
 import (
@@ -11,11 +13,9 @@ type DevicesGroup struct {
 func (s *DevicesGroup) Apply(d *data) error {
 	dir, err := d.join("devices")
 	if err != nil {
-		if cgroups.IsNotFound(err) {
-			return nil
-		} else {
-			return err
-		}
+		// We will return error even it's `not found` error, devices
+		// cgroup is hard requirement for container's security.
+		return err
 	}
 
 	if err := s.Set(dir, d.c); err != nil {
@@ -35,6 +35,17 @@ func (s *DevicesGroup) Set(path string, cgroup *configs.Cgroup) error {
 			if err := writeFile(path, "devices.allow", dev.CgroupString()); err != nil {
 				return err
 			}
+		}
+		return nil
+	}
+
+	if err := writeFile(path, "devices.allow", "a"); err != nil {
+		return err
+	}
+
+	for _, dev := range cgroup.DeniedDevices {
+		if err := writeFile(path, "devices.deny", dev.CgroupString()); err != nil {
+			return err
 		}
 	}
 

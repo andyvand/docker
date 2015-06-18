@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.6.2 (2015-05-13)
+
+####  Runtime
+- Revert change prohibiting mounting into /sys
+
+## 1.6.1 (2015-05-07)
+
+####  Security
+- Fix read/write /proc paths (CVE-2015-3630)
+- Prohibit VOLUME /proc and VOLUME / (CVE-2015-3631)
+- Fix opening of file-descriptor 1 (CVE-2015-3627)
+- Fix symlink traversal on container respawn allowing local privilege escalation (CVE-2015-3629)
+- Prohibit mount of /sys
+
+#### Runtime
+- Update AppArmor policy to not allow mounts
+
+## 1.6.0 (2015-04-07)
+
+#### Builder
++ Building images from an image ID
++ Build containers with resource constraints, ie `docker build --cpu-shares=100 --memory=1024m...`
++ `commit --change` to apply specified Dockerfile instructions while committing the image
++ `import --change` to apply specified Dockerfile instructions while importing the image
++ Builds no longer continue in the background when canceled with CTRL-C
+
+#### Client
++ Windows Support
+
+#### Runtime
++ Container and image Labels
++ `--cgroup-parent` for specifying a parent cgroup to place container cgroup within
++ Logging drivers, `json-file`, `syslog`, or `none`
++ Pulling images by ID
++ `--ulimit` to set the ulimit on a container
++ `--default-ulimit` option on the daemon which applies to all created containers (and overwritten by `--ulimit` on run)
+
 ## 1.5.0 (2015-02-10)
 
 #### Builder
@@ -272,7 +309,7 @@
 
 #### Hack
 * Clean up "go test" output from "make test" to be much more readable/scannable.
-* Excluse more "definitely not unit tested Go source code" directories from hack/make/test.
+* Exclude more "definitely not unit tested Go source code" directories from hack/make/test.
 + Generate md5 and sha256 hashes when building, and upload them via hack/release.sh.
 - Include contributed completions in Ubuntu PPA.
 + Add cli integration tests.
@@ -552,7 +589,7 @@ With the ongoing changes to the networking and execution subsystems of docker te
 * The ADD instruction now supports caching, which avoids unnecessarily re-uploading the same source content again and again when it hasn’t changed
 * The new ONBUILD instruction adds to your image a “trigger” instruction to be executed at a later time, when the image is used as the base for another build
 * Docker now ships with an experimental storage driver which uses the BTRFS filesystem for copy-on-write
-* Docker is officially supported on Mac OSX
+* Docker is officially supported on Mac OS X
 * The Docker daemon supports systemd socket activation
 
 ## 0.7.6 (2014-01-14)
@@ -606,12 +643,12 @@ With the ongoing changes to the networking and execution subsystems of docker te
 - Fix ADD caching issue with . prefixed path
 - Fix docker build on devicemapper by reverting sparse file tar option
 - Fix issue with file caching and prevent wrong cache hit
-* Use same error handling while unmarshalling  CMD and ENTRYPOINT
+* Use same error handling while unmarshalling CMD and ENTRYPOINT
 
 #### Documentation
 
 * Simplify and streamline Amazon Quickstart
-* Install instructions use unprefixed fedora image
+* Install instructions use unprefixed Fedora image
 * Update instructions for mtu flag for Docker on GCE
 + Add Ubuntu Saucy to installation
 - Fix for wrong version warning on master instead of latest
@@ -786,7 +823,7 @@ With the ongoing changes to the networking and execution subsystems of docker te
 * Improve unit tests
 * The test suite now runs all tests even if one fails
 * Refactor C in Go (Devmapper)
-- Fix OSX compilation
+- Fix OS X compilation
 
 ## 0.7.0 (2013-11-25)
 
@@ -804,7 +841,7 @@ With the ongoing changes to the networking and execution subsystems of docker te
 
 #### Runtime
 
-* Improve stability, fixes some race conditons
+* Improve stability, fixes some race conditions
 * Skip the volumes mounted when deleting the volumes of container.
 * Fix layer size computation: handle hard links correctly
 * Use the work Path for docker cp CONTAINER:PATH
