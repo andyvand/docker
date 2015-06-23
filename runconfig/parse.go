@@ -121,37 +121,11 @@ func Parse(cmd *flag.FlagSet, args []string) (*Config, *HostConfig, *flag.FlagSe
 		return nil, nil, cmd, fmt.Errorf("--net: invalid net mode: %v", err)
 	}
 
-	if (netMode.IsHost() || netMode.IsContainer()) && *flHostname != "" {
-		return nil, nil, cmd, ErrConflictNetworkHostname
+	if err := validateNetMode(netMode, flHostname, flLinks, flDns, flExtraHosts,
+		flMacAddress, flPublish, flPublishAll, flExpose); err != nil {
+		return nil, nil, cmd, err
 	}
 
-	if netMode.IsHost() && flLinks.Len() > 0 {
-		return nil, nil, cmd, ErrConflictHostNetworkAndLinks
-	}
-
-	if netMode.IsContainer() && flLinks.Len() > 0 {
-		return nil, nil, cmd, ErrConflictContainerNetworkAndLinks
-	}
-
-	if (netMode.IsHost() || netMode.IsContainer()) && flDns.Len() > 0 {
-		return nil, nil, cmd, ErrConflictNetworkAndDns
-	}
-
-	if (netMode.IsContainer() || netMode.IsHost()) && flExtraHosts.Len() > 0 {
-		return nil, nil, cmd, ErrConflictNetworkHosts
-	}
-
-	if (netMode.IsContainer() || netMode.IsHost()) && *flMacAddress != "" {
-		return nil, nil, cmd, ErrConflictContainerNetworkAndMac
-	}
-
-	if netMode.IsContainer() && (flPublish.Len() > 0 || *flPublishAll == true) {
-		return nil, nil, cmd, ErrConflictNetworkPublishPorts
-	}
-
-	if netMode.IsContainer() && flExpose.Len() > 0 {
-		return nil, nil, cmd, ErrConflictNetworkExposePorts
-	}
 	// Validate the input mac address
 	if *flMacAddress != "" {
 		if _, err := opts.ValidateMACAddress(*flMacAddress); err != nil {
@@ -461,20 +435,6 @@ func parseKeyValueOpts(opts opts.ListOpts) ([]KeyValuePair, error) {
 		out[i] = KeyValuePair{Key: k, Value: v}
 	}
 	return out, nil
-}
-
-func parseNetMode(netMode string) (NetworkMode, error) {
-	parts := strings.Split(netMode, ":")
-	switch mode := parts[0]; mode {
-	case "default", "bridge", "none", "host":
-	case "container":
-		if len(parts) < 2 || parts[1] == "" {
-			return "", fmt.Errorf("invalid container format container:<name|id>")
-		}
-	default:
-		return "", fmt.Errorf("invalid --net: %s", netMode)
-	}
-	return NetworkMode(netMode), nil
 }
 
 func ParseDevice(device string) (DeviceMapping, error) {
