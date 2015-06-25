@@ -14,6 +14,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
 	"github.com/docker/docker/pkg/common"
+	"github.com/docker/docker/pkg/guid"
 	"github.com/docker/docker/pkg/hcsshim"
 	"gopkg.in/natefinch/npipe.v2"
 )
@@ -139,6 +140,11 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 
+	type layer struct {
+		Id   string
+		Path string
+	}
+
 	type defConfig struct {
 		DefFile string
 	}
@@ -158,12 +164,14 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 
 	type containerInit struct {
-		SystemType  string
-		Name        string
-		IsDummy     bool
-		VolumePath  string
-		Definitions []defConfig
-		Devices     []device
+		SystemType      string
+		Name            string
+		IsDummy         bool
+		VolumePath      string
+		LayerFolderPath string
+		Layers          []layer
+		Definitions     []defConfig
+		Devices         []device
 	}
 
 	if len(os.Getenv("windowsexecdummy")) > 0 {
@@ -171,10 +179,18 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 
 	cu := &containerInit{
-		SystemType: "Container",
-		Name:       c.ID,
-		IsDummy:    c.Dummy,
-		VolumePath: c.Rootfs,
+		SystemType:      "Container",
+		Name:            c.ID,
+		IsDummy:         c.Dummy,
+		VolumePath:      c.Rootfs,
+		LayerFolderPath: c.LayerFolder,
+	}
+
+	for i := 0; i < len(c.LayerPaths); i++ {
+		cu.Layers = append(cu.Layers, layer{
+			Id:   guid.NewGuid(c.LayerPaths[i]).ToString(),
+			Path: c.LayerPaths[i],
+		})
 	}
 
 	// Dummy mode will balk if the definitions are configured

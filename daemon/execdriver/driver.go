@@ -137,6 +137,7 @@ type ProcessConfig struct {
 type Command struct {
 	ID                 string            `json:"id"`
 	Rootfs             string            `json:"rootfs"` // root fs of the container
+	LayerFolder        string            `json:"layer_folder"`
 	ReadonlyRootfs     bool              `json:"readonly_rootfs"`
 	InitPath           string            `json:"initpath"` // dockerinit
 	WorkingDir         string            `json:"working_dir"`
@@ -157,4 +158,5 @@ type Command struct {
 	LxcConfig          []string          `json:"lxc_config"`
 	AppArmorProfile    string            `json:"apparmor_profile"`
 	Dummy              bool              `json:"dummy"`
+	LayerPaths         []string          `json:"layer_paths"`
 }

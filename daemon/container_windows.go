@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -174,9 +175,14 @@ func populateCommand(c *Container, env []string) error {
 
 	processConfig.Env = env
 
+	wd, _ := c.daemon.driver.(*windows.WindowsGraphDriver)
+	img, _ := c.daemon.graph.Get(c.ImageID)
+	ids, _ := c.daemon.graph.ParentLayerIds(img)
+
 	c.command = &execdriver.Command{
 		ID:             c.ID,
 		Rootfs:         c.RootfsPath(),
+		LayerFolder:    filepath.Join(wd.Info().HomeDir, filepath.Base(c.ID)),
 		ReadonlyRootfs: c.hostConfig.ReadonlyRootfs,
 		InitPath:       "/.dockerinit",
 		WorkingDir:     c.Config.WorkingDir,
@@ -193,7 +199,8 @@ func populateCommand(c *Container, env []string) error {
 		MountLabel:    c.GetMountLabel(),
 		//		LxcConfig:          lxcConfig,
 		//		AppArmorProfile:    c.AppArmorProfile,
-		Dummy: c.Config.Dummy,
+		Dummy:      c.Config.Dummy,
+		LayerPaths: wd.LayerIdsToPaths(ids),
 	}
 
 	return nil
