@@ -4,6 +4,7 @@ package graphdriver
 
 import (
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/hcsshim"
 )
 
@@ -12,6 +13,8 @@ type WindowsGraphDriver interface {
 	CopyDiff(id, sourceId string, parentLayerPaths []string) error
 	LayerIdsToPaths(ids []string) []string
 	Info() hcsshim.DriverInfo
+	Export(id string, parentLayerPaths []string) (archive.Archive, error)
+	Import(id string, layerData archive.ArchiveReader, parentLayerPaths []string) (int64, error)
 }
 
 const (

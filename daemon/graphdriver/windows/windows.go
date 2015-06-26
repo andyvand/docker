@@ -4,6 +4,7 @@ package windows
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -308,6 +309,83 @@ func (d *WindowsGraphDriver) CopyDiff(sourceId, id string, parentLayerPaths []st
 	}
 
 	return hcsshim.CopyLayer(d.info, sourceId, id, parentLayerPaths)
+}
+
+func (d *WindowsGraphDriver) Export(id string, parentLayerPaths []string) (arch archive.Archive, err error) {
+	layerFs, err := d.Get(id, "")
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			d.Put(id)
+		}
+	}()
+
+	tempFolder := layerFs + "-temp"
+	if err = os.MkdirAll(tempFolder, 0755); err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			if err2 := os.RemoveAll(tempFolder); err2 != nil {
+				log.Debugln("Couldn't clean-up tempFolder:", err2)
+			}
+		}
+	}()
+
+	if err = hcsshim.ExportLayer(d.info, id, tempFolder, parentLayerPaths); err != nil {
+		return
+	}
+
+	archive, err := archive.Tar(tempFolder, archive.Uncompressed)
+	if err != nil {
+		return
+	}
+	return ioutils.NewReadCloserWrapper(archive, func() error {
+		err := archive.Close()
+		d.Put(id)
+		if err2 := os.RemoveAll(tempFolder); err2 != nil {
+			log.Debugln("Couldn't clean-up tempFolder:", err2)
+		}
+		return err
+	}), nil
+
+}
+
+func (d *WindowsGraphDriver) Import(id string, layerData archive.ArchiveReader, parentLayerPaths []string) (size int64, err error) {
+	layerFs, err := d.Get(id, "")
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			d.Put(id)
+		}
+	}()
+
+	tempFolder := layerFs + "-temp"
+	if err = os.MkdirAll(tempFolder, 0755); err != nil {
+		return
+	}
+	defer func() {
+		if err2 := os.RemoveAll(tempFolder); err2 != nil {
+			log.Debugln("Couldn't clean-up tempFolder:", err2)
+		}
+	}()
+
+	start := time.Now().UTC()
+	log.Debugf("Start untar layer")
+	if size, err = chrootarchive.ApplyLayer(tempFolder, layerData); err != nil {
+		return
+	}
+	log.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
+
+	if err = hcsshim.ImportLayer(d.info, id, tempFolder, parentLayerPaths); err != nil {
+		return
+	}
+
+	return
 }
 
 func (d *WindowsGraphDriver) LayerIdsToPaths(ids []string) []string {

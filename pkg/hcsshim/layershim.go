@@ -25,6 +25,8 @@ var (
 	procCreateSandboxLayer = modvmcompute.NewProc("CreateSandboxLayer")
 	procPrepareLayer       = modvmcompute.NewProc("PrepareLayer")
 	procUnprepareLayer     = modvmcompute.NewProc("UnprepareLayer")
+	procExportLayer        = modvmcompute.NewProc("ExportLayer")
+	procImportLayer        = modvmcompute.NewProc("ImportLayer")
 )
 
 /* To pass into syscall, we need a struct matching the following:
@@ -523,6 +525,118 @@ func UnprepareLayer(info DriverInfo, layerId string) error {
 		uintptr(unsafe.Pointer(layerIdp)))
 	use(unsafe.Pointer(&infop))
 	use(unsafe.Pointer(layerIdp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func ExportLayer(info DriverInfo, layerId, exportFolderPath string, parentLayerPaths []string) error {
+	log.Debugln("hcsshim::ExportLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("layerId:", layerId)
+	log.Debugln("exportFolderPath:", exportFolderPath)
+
+	layers, err := LayerPathsToDescriptors(parentLayerPaths)
+	if err != nil {
+		log.Debugln("Failed to generate layer descriptors ", err)
+		return err
+	}
+
+	layerIdp, err := syscall.UTF16PtrFromString(layerId)
+	if err != nil {
+		log.Debugln("Failed conversion of layerId to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	exportFolderPathp, err := syscall.UTF16PtrFromString(exportFolderPath)
+	if err != nil {
+		log.Debugln("Failed conversion of exportFolderPath to pointer ", err)
+		return err
+	}
+
+	var layerDescriptorsp *WC_LAYER_DESCRIPTOR
+	if len(layers) > 0 {
+		layerDescriptorsp = &(layers[0])
+	} else {
+		layerDescriptorsp = nil
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procExportLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(layerIdp)),
+		uintptr(unsafe.Pointer(exportFolderPathp)),
+		uintptr(unsafe.Pointer(layerDescriptorsp)),
+		uintptr(len(layers)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(layerIdp))
+	use(unsafe.Pointer(exportFolderPathp))
+	use(unsafe.Pointer(layerDescriptorsp))
+
+	if r1 != 0 {
+		return syscall.Errno(r1)
+	}
+
+	return nil
+}
+
+func ImportLayer(info DriverInfo, layerId, importFolderPath string, parentLayerPaths []string) error {
+	log.Debugln("hcsshim::ImportLayer")
+	log.Debugln("info.Flavor:", info.Flavor)
+	log.Debugln("layerId:", layerId)
+	log.Debugln("importFolderPath:", importFolderPath)
+
+	layers, err := LayerPathsToDescriptors(parentLayerPaths)
+	if err != nil {
+		log.Debugln("Failed to generate layer descriptors ", err)
+		return err
+	}
+
+	layerIdp, err := syscall.UTF16PtrFromString(layerId)
+	if err != nil {
+		log.Debugln("Failed conversion of layerId to pointer ", err)
+		return err
+	}
+
+	infop, err := convertInfo(info)
+	if err != nil {
+		log.Debugln("Failed conversion of driver info ", err)
+		return err
+	}
+
+	importFolderPathp, err := syscall.UTF16PtrFromString(importFolderPath)
+	if err != nil {
+		log.Debugln("Failed conversion of importFolderPath to pointer ", err)
+		return err
+	}
+
+	var layerDescriptorsp *WC_LAYER_DESCRIPTOR
+	if len(layers) > 0 {
+		layerDescriptorsp = &(layers[0])
+	} else {
+		layerDescriptorsp = nil
+	}
+
+	// Call the procedure itself.
+	r1, _, _ := procImportLayer.Call(
+		uintptr(unsafe.Pointer(&infop)),
+		uintptr(unsafe.Pointer(layerIdp)),
+		uintptr(unsafe.Pointer(importFolderPathp)),
+		uintptr(unsafe.Pointer(layerDescriptorsp)),
+		uintptr(len(layers)))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(layerIdp))
+	use(unsafe.Pointer(importFolderPathp))
+	use(unsafe.Pointer(layerDescriptorsp))
 
 	if r1 != 0 {
 		return syscall.Errno(r1)

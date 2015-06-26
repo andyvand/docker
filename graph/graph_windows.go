@@ -78,7 +78,7 @@ func (graph *Graph) Register(img *image.Image, layerData archive.ArchiveReader) 
 		if err := wd.CopyDiff(img.Container, img.ID, wd.LayerIdsToPaths(ids)); err != nil {
 			return fmt.Errorf("Driver %s failed to copy image rootfs %s: %s", graph.driver, img.Container, err)
 		}
-	} else {
+	} else if img.Parent == "" {
 		// Create root filesystem in the driver
 		if err := graph.driver.Create(img.ID, img.Parent); err != nil {
 			return fmt.Errorf("Driver %s failed to create image rootfs %s: %s", graph.driver, img.ID, err)

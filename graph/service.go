@@ -3,6 +3,7 @@ package graph
 import (
 	"fmt"
 	"io"
+	"runtime"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
@@ -164,17 +165,19 @@ func (s *TagStore) CmdTarLayer(job *engine.Job) engine.Status {
 	}
 	name := job.Args[0]
 	if image, err := s.LookupImage(name); err == nil && image != nil {
-		fs, err := image.TarLayer()
-		if err != nil {
-			return job.Error(err)
-		}
-		defer fs.Close()
+		if runtime.GOOS != "windows" || image.Parent != "" {
+			fs, err := image.TarLayer()
+			if err != nil {
+				return job.Error(err)
+			}
+			defer fs.Close()
 
-		written, err := io.Copy(job.Stdout, fs)
-		if err != nil {
-			return job.Error(err)
+			written, err := io.Copy(job.Stdout, fs)
+			if err != nil {
+				return job.Error(err)
+			}
+			log.Debugf("rendered layer for %s of [%d] size", image.ID, written)
 		}
-		log.Debugf("rendered layer for %s of [%d] size", image.ID, written)
 		return engine.StatusOK
 	}
 	return job.Errorf("No such image: %s", name)
