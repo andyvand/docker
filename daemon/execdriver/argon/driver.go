@@ -250,11 +250,13 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}()
 
 	// We use a different pipe name between real and dummy mode in the HCS
-	var pipePrefix string
+	var serverPipeFormat, clientPipeFormat string
 	if c.Dummy {
-		pipePrefix = `\\.\pipe\`
+		clientPipeFormat = `\\.\pipe\docker-run-%[1]s-%[2]s`
+		serverPipeFormat = clientPipeFormat
 	} else {
-		pipePrefix = fmt.Sprintf(`\\.\Containers\%s\Device\NamedPipe\`, c.ID)
+		clientPipeFormat = `\\.\pipe\docker-run-%[2]s`
+		serverPipeFormat = `\\.\Containers\%[1]s\Device\NamedPipe\docker-run-%[2]s`
 	}
 
 	// This is what gets passed into the exec - structure containing the
@@ -263,12 +265,13 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 
 	// Connect stdin
 	if pipes.Stdin != nil {
-		stdDevices.StdInPipe = pipePrefix + c.ID + "-stdin"
+		stdInPipe := fmt.Sprintf(serverPipeFormat, c.ID, "stdin")
+		stdDevices.StdInPipe = fmt.Sprintf(clientPipeFormat, c.ID, "stdin")
 
 		// Listen on the named pipe
-		inListen, err = npipe.Listen(stdDevices.StdInPipe)
+		inListen, err = npipe.Listen(stdInPipe)
 		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
+			log.Debugln("Failed to listen on ", stdInPipe, err)
 			return execdriver.ExitStatus{ExitCode: -1}, err
 		}
 		defer inListen.Close()
@@ -276,30 +279,32 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 		// Launch a goroutine to do the accept. We do this so that we can
 		// cause an otherwise blocking goroutine to gracefully close when
 		// the caller (us) closes the listener
-		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
+		go stdinAccept(inListen, stdInPipe, pipes.Stdin)
 	}
 
 	// Connect stdout
-	stdDevices.StdOutPipe = pipePrefix + c.ID + "-stdout"
-	outListen, err = npipe.Listen(stdDevices.StdOutPipe)
+	stdOutPipe := fmt.Sprintf(serverPipeFormat, c.ID, "stdout")
+	stdDevices.StdOutPipe = fmt.Sprintf(clientPipeFormat, c.ID, "stdout")
+	outListen, err = npipe.Listen(stdOutPipe)
 	if err != nil {
-		log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
+		log.Debugln("Failed to listen on ", stdOutPipe, err)
 		return execdriver.ExitStatus{ExitCode: -1}, err
 	}
 	defer outListen.Close()
-	go stdouterrAccept(outListen, stdDevices.StdOutPipe, pipes.Stdout)
+	go stdouterrAccept(outListen, stdOutPipe, pipes.Stdout)
 
 	// No stderr on TTY.
 	if !c.ProcessConfig.Tty {
 		// Connect stderr
-		stdDevices.StdErrPipe = pipePrefix + c.ID + "-stderr"
-		errListen, err = npipe.Listen(stdDevices.StdErrPipe)
+		stdErrPipe := fmt.Sprintf(serverPipeFormat, c.ID, "stderr")
+		stdDevices.StdErrPipe = fmt.Sprintf(clientPipeFormat, c.ID, "stderr")
+		errListen, err = npipe.Listen(stdErrPipe)
 		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
+			log.Debugln("Failed to listen on ", stdErrPipe, err)
 			return execdriver.ExitStatus{ExitCode: -1}, err
 		}
 		defer errListen.Close()
-		go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
+		go stdouterrAccept(errListen, stdErrPipe, pipes.Stderr)
 	}
 
 	// Sure this would get caught earlier, but just in case - validate that we
@@ -466,13 +471,14 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 	// may conflict with the pipe name being used by RUN.
 
 	// We use a different pipe name between real and dummy mode in the HCS
-	var pipePrefix string
-	var randomID string = common.GenerateRandomID()
-
+	randomID := common.GenerateRandomID()
+	var serverPipeFormat, clientPipeFormat string
 	if c.Dummy {
-		pipePrefix = `\\.\pipe\` + randomID + `\`
+		clientPipeFormat = `\\.\pipe\docker-exec-%[1]s-%[2]s-%[3]s`
+		serverPipeFormat = clientPipeFormat
 	} else {
-		pipePrefix = fmt.Sprintf(`\\.\Containers\%s\Device\NamedPipe\%s\`, c.ID, randomID)
+		clientPipeFormat = `\\.\pipe\docker-exec-%[2]s-%[3]s`
+		serverPipeFormat = `\\.\Containers\%[1]s\Device\NamedPipe\docker-exec-%[2]s-%[3]s`
 	}
 
 	// This is what gets passed into the exec - structure containing the
@@ -481,12 +487,13 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 
 	// Connect stdin
 	if pipes.Stdin != nil {
-		stdDevices.StdInPipe = pipePrefix + c.ID + "-stdin"
+		stdInPipe := fmt.Sprintf(serverPipeFormat, c.ID, randomID, "stdin")
+		stdDevices.StdInPipe = fmt.Sprintf(clientPipeFormat, c.ID, randomID, "stdin")
 
 		// Listen on the named pipe
-		inListen, err = npipe.Listen(stdDevices.StdInPipe)
+		inListen, err = npipe.Listen(stdInPipe)
 		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdInPipe, err)
+			log.Debugln("Failed to listen on ", stdInPipe, err)
 			return -1, err
 		}
 		defer inListen.Close()
@@ -494,30 +501,32 @@ func (d *driver) Exec(c *execdriver.Command, processConfig *execdriver.ProcessCo
 		// Launch a goroutine to do the accept. We do this so that we can
 		// cause an otherwise blocking goroutine to gracefully close when
 		// the caller (us) closes the listener
-		go stdinAccept(inListen, stdDevices.StdInPipe, pipes.Stdin)
+		go stdinAccept(inListen, stdInPipe, pipes.Stdin)
 	}
 
 	// Connect stdout
-	stdDevices.StdOutPipe = pipePrefix + c.ID + "-stdout"
-	outListen, err = npipe.Listen(stdDevices.StdOutPipe)
+	stdOutPipe := fmt.Sprintf(serverPipeFormat, c.ID, randomID, "stdout")
+	stdDevices.StdOutPipe = fmt.Sprintf(clientPipeFormat, c.ID, randomID, "stdout")
+	outListen, err = npipe.Listen(stdOutPipe)
 	if err != nil {
-		log.Debugln("Failed to listen on ", stdDevices.StdOutPipe, err)
+		log.Debugln("Failed to listen on ", stdOutPipe, err)
 		return -1, err
 	}
 	defer outListen.Close()
-	go stdouterrAccept(outListen, stdDevices.StdOutPipe, pipes.Stdout)
+	go stdouterrAccept(outListen, stdOutPipe, pipes.Stdout)
 
 	// No stderr on TTY.
 	if !c.ProcessConfig.Tty {
 		// Connect stderr
-		stdDevices.StdErrPipe = pipePrefix + c.ID + "-stderr"
-		errListen, err = npipe.Listen(stdDevices.StdErrPipe)
+		stdErrPipe := fmt.Sprintf(serverPipeFormat, c.ID, randomID, "stderr")
+		stdDevices.StdErrPipe = fmt.Sprintf(clientPipeFormat, c.ID, randomID, "stderr")
+		errListen, err = npipe.Listen(stdErrPipe)
 		if err != nil {
-			log.Debugln("Failed to listen on ", stdDevices.StdErrPipe, err)
+			log.Debugln("Failed to listen on ", stdErrPipe, err)
 			return -1, err
 		}
 		defer errListen.Close()
-		go stdouterrAccept(errListen, stdDevices.StdErrPipe, pipes.Stderr)
+		go stdouterrAccept(errListen, stdErrPipe, pipes.Stderr)
 	}
 
 	// Sure this would get caught earlier, but just in case - validate that we
