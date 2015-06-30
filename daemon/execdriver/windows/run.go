@@ -12,7 +12,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/daemon/execdriver"
-	"github.com/docker/docker/pkg/hcsshim"
+	"github.com/microsoft/hcsshim"
 	"github.com/natefinch/npipe"
 )
 

@@ -3,7 +3,7 @@
 package windows
 
 import (
-	"github.com/docker/docker/pkg/hcsshim"
+	"github.com/microsoft/hcsshim"
 )
 
 // TtyConsole is for when using a container interactively

@@ -48,10 +48,6 @@ func GetLayerMountPath(info DriverInfo, id string) (string, error) {
 		uintptr(unsafe.Pointer(&mountPathLength)),
 		uintptr(unsafe.Pointer(nil)))
 
-	use(unsafe.Pointer(&mountPathLength))
-	use(unsafe.Pointer(&infop))
-	use(unsafe.Pointer(idp))
-
 	if r1 != 0 {
 		err = fmt.Errorf(title+" - First Win32 API call returned error r1=%d err=%s id=%s flavour=%d",
 			r1, syscall.Errno(r1), id, info.Flavour)
@@ -72,6 +68,10 @@ func GetLayerMountPath(info DriverInfo, id string) (string, error) {
 		uintptr(unsafe.Pointer(idp)),
 		uintptr(unsafe.Pointer(&mountPathLength)),
 		uintptr(unsafe.Pointer(&mountPathp[0])))
+
+	use(unsafe.Pointer(&mountPathLength))
+	use(unsafe.Pointer(&infop))
+	use(unsafe.Pointer(idp))
 
 	if r1 != 0 {
 		err = fmt.Errorf(title+" - Second Win32 API call returned error r1=%d errno=%d id=%s flavour=%d",
