@@ -236,6 +236,11 @@ func (s *DockerSuite) TestPsListContainersFilterStatus(c *check.C) {
 		c.Fatalf("Expected id %s, got %s for running filter, output: %q", secondID[:12], containerOut, out)
 	}
 
+	out, _ = dockerCmd(c, "ps", "-a", "-q", "--filter=status=rubbish")
+	if !strings.Contains(out, "Unrecognised filter value for status") {
+		c.Fatalf("Expected error response due to invalid status filter, got %s, output: %q", containerOut, out)
+	}
+
 }
 
 func (s *DockerSuite) TestPsListContainersFilterID(c *check.C) {

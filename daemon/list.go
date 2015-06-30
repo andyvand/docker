@@ -53,6 +53,13 @@ func (daemon *Daemon) Containers(config *ContainersConfig) ([]*types.Container, 
 
 	if i, ok := psFilters["status"]; ok {
 		for _, value := range i {
+			if value != "created" &&
+				value != "restarting" &&
+				value != "running" &&
+				value != "paused" &&
+				value != "exited" {
+				return nil, errors.New("Unrecognised filter value for status")
+			}
 			if value == "exited" || value == "created" {
 				all = true
 			}
