@@ -29,10 +29,17 @@ func kill(id string, pid int) error {
 		err = nil
 	}
 
-	// Shutdown the compute system
-	if err = hcsshim.ShutdownComputeSystem(id); err != nil {
-		logrus.Errorf("Failed to shutdowm %s - %s", id, err)
-	}
+	if terminateMode {
+		// Terminate the compute system
+		if err = hcsshim.TerminateComputeSystem(id); err != nil {
+			logrus.Errorf("Failed to shutdowm %s - %s", id, err)
+		}
 
+	} else {
+		// Shutdown the compute system
+		if err = hcsshim.TerminateComputeSystem(id); err != nil {
+			logrus.Errorf("Failed to shutdowm %s - %s", id, err)
+		}
+	}
 	return err
 }

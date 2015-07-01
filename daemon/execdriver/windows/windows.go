@@ -17,6 +17,9 @@ import (
 // used for running production containers on Windows.
 var dummyMode bool
 
+// This allows the daemon to terminate containers rather than shutdown
+var terminateMode bool
+
 var (
 	DriverName = "Windows 1854"
 	Version    = dockerversion.VERSION + " " + dockerversion.GITCOMMIT
@@ -53,6 +56,14 @@ func NewDriver(root, initPath string, options []string) (*driver, error) {
 				dummyMode = true
 				logrus.Warn("Using dummy mode in Windows exec driver. This is for development use only!")
 			}
+
+		case "terminate":
+			switch val {
+			case "1":
+				terminateMode = true
+				logrus.Warn("Using terminate mode in Windows exec driver. This is for testing purposes only.")
+			}
+
 		default:
 			return nil, fmt.Errorf("Unrecognised exec driver option %s\n", key)
 		}

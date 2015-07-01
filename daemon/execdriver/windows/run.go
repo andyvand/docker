@@ -116,12 +116,23 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 	}
 	defer func() {
 		// Stop the container
-		logrus.Debugf("Shutting down container %s", c.ID)
-		if err := hcsshim.ShutdownComputeSystem(c.ID); err != nil {
-			// IMPORTANT: Don't fail if fails to change state. It could already
-			// have been stopped through kill().
-			// Otherwise, the docker daemon will hang in job wait()
-			logrus.Warnf("Ignoring error from ShutdownComputeSystem %s", err)
+
+		if terminateMode {
+			logrus.Debugf("Terminating container %s", c.ID)
+			if err := hcsshim.TerminateComputeSystem(c.ID); err != nil {
+				// IMPORTANT: Don't fail if fails to change state. It could already
+				// have been stopped through kill().
+				// Otherwise, the docker daemon will hang in job wait()
+				logrus.Warnf("Ignoring error from TerminateComputeSystem %s", err)
+			}
+		} else {
+			logrus.Debugf("Shutting down container %s", c.ID)
+			if err := hcsshim.ShutdownComputeSystem(c.ID); err != nil {
+				// IMPORTANT: Don't fail if fails to change state. It could already
+				// have been stopped through kill().
+				// Otherwise, the docker daemon will hang in job wait()
+				logrus.Warnf("Ignoring error from ShutdownComputeSystem %s", err)
+			}
 		}
 	}()
 
